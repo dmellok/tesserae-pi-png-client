@@ -27,21 +27,59 @@ Pick the **png** client if any of the following is true:
 
 ## Install
 
-### On the Pi
+### One-shot (recommended)
+
+```bash
+git clone https://github.com/dmellok/tesserae-pi-png-client
+cd tesserae-pi-png-client
+./scripts/install.sh
+```
+
+Run as your normal user (NOT root, NOT via sudo). The script invokes sudo
+internally for the privileged bits and runs pip in a venv owned by you.
+It does, idempotently:
+
+1. `apt-get install` the build prereqs (`python3-dev`, `build-essential`,
+   `libopenjp2-7`, `libtiff6`)
+2. `raspi-config nonint do_spi 0` to enable SPI
+3. `usermod -aG gpio,spi $USER` for HAT access (needs a re-login to take effect)
+4. Create `.venv` in the repo dir
+5. `pip install -e .` — pulls `inky[rpi]`, `paho-mqtt`, `Pillow`
+6. Prompt for MQTT host/port/user/pass/client-id → write
+   `~/.config/tesserae-pi-png-client/config.toml` (skipped if it exists, unless
+   `--reconfigure`)
+7. Symlink `.venv/bin/tesserae-pi-png-client` to `/usr/local/bin/`
+8. Install + enable + start the systemd service (skip with `--no-service`)
+
+Useful flags:
+
+```
+--no-service       skip systemd unit install
+--paint-test       run --paint-test after install
+--skip-apt         skip apt-get
+--non-interactive  never prompt — write default config if none exists
+--reconfigure      overwrite existing config
+--bookworm         also pip install rpi-lgpio (Pi 5 / Bookworm needs it
+                   because RPi.GPIO does not work on those boards)
+--user USER        user the systemd unit runs as (default: $USER)
+```
+
+### Manual (if you prefer step-by-step)
 
 ```bash
 sudo apt update
-sudo apt install -y python3-pip libjpeg-dev   # libjpeg for Pillow
-sudo raspi-config nonint do_spi 0             # enable SPI
-sudo usermod -aG gpio,spi "$USER"             # may need a re-login
+sudo apt install -y python3-pip python3-dev build-essential \
+                    libopenjp2-7 libtiff6
+sudo raspi-config nonint do_spi 0
+sudo usermod -aG gpio,spi "$USER"          # log out + back in after this
 
 git clone https://github.com/dmellok/tesserae-pi-png-client
 cd tesserae-pi-png-client
-sudo pip install .
+python3 -m venv .venv
+.venv/bin/pip install -e .                 # pulls inky[rpi]
+# Pi 5 / Bookworm only:
+.venv/bin/pip install rpi-lgpio
 ```
-
-> If `pip install` complains about `inky[rpi]`, your Pi may be missing
-> `python3-dev`/`build-essential` — `apt install` those first.
 
 ### Verify hardware
 
@@ -82,7 +120,9 @@ Note: there is no `[panel]` section — the panel is auto-detected from the
 HAT EEPROM. If detection fails the daemon refuses to start (see
 troubleshooting).
 
-### Install as a service
+### Install as a service (if you used the manual path)
+
+`scripts/install.sh` already does this. If you installed manually:
 
 ```bash
 sudo ./scripts/install-service.sh        # uses $SUDO_USER by default
