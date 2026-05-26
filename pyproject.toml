@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tesserae-pi-png-client"
+version = "0.1.0"
+description = "Raspberry Pi daemon that subscribes to a Tesserae server over MQTT and paints PNG frames onto a Pimoroni e-ink panel via the inky library."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Tesserae" }]
+dependencies = [
+    "paho-mqtt>=2.0,<3",
+    "Pillow>=10,<12",
+    # set_image() is the high-level entry point — no private-API dependency,
+    # so we can take a range rather than the exact pin the bin client uses.
+    "inky[rpi]>=2.0,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "mypy>=1.10",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+tesserae-pi-png-client = "tesserae_pi_png_client.main:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+
+[[tool.mypy.overrides]]
+# Contract modules — strict.
+module = [
+    "tesserae_pi_png_client.config",
+    "tesserae_pi_png_client.transforms",
+    "tesserae_pi_png_client.heartbeat",
+    "tesserae_pi_png_client.mqtt_loop",
+]
+strict = true
+
+[[tool.mypy.overrides]]
+# Hardware-touching paths — defaults.
+module = ["tesserae_pi_png_client.paint", "tesserae_pi_png_client.main"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["paho.*", "inky.*", "PIL.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
