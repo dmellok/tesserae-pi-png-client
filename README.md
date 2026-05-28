@@ -70,8 +70,10 @@ Useful flags:
 sudo apt update
 sudo apt install -y python3-pip python3-dev build-essential \
                     libopenjp2-7 libtiff6
-sudo raspi-config nonint do_spi 0
+sudo raspi-config nonint do_spi 0          # pixel data to the panel
+sudo raspi-config nonint do_i2c 0          # HAT EEPROM read by auto-detect
 sudo usermod -aG gpio,spi "$USER"          # log out + back in after this
+# reboot so SPI + I2C take effect before first run
 
 git clone https://github.com/dmellok/tesserae-pi-png-client
 cd tesserae-pi-png-client
@@ -229,11 +231,16 @@ For each arriving frame:
 
 ## Troubleshooting
 
-**`could not auto-detect inky panel`**
-- `sudo raspi-config nonint do_spi 0` — enable SPI
-- `ls /proc/device-tree/hat` — confirm the HAT EEPROM is readable
+**`could not auto-detect inky panel` / `No EEPROM detected`**
+- enable **both** SPI and I2C — the panel ID lives in the HAT EEPROM, which
+  `inky.auto()` reads over I2C:
+  `sudo raspi-config nonint do_spi 0 && sudo raspi-config nonint do_i2c 0`
+- **reboot**, then confirm the EEPROM is visible:
+  `ls /dev/i2c-1 && sudo i2cdetect -y 1` (expect `50` in the grid)
 - check your user is in `gpio` and `spi` groups: `groups`
-- reboot after enabling SPI
+- if `i2cdetect` shows no `50`, the board has no readable EEPROM (some
+  Impression/Spectra units, all non-genuine boards) and auto-detect can't
+  identify it
 
 **Frame never paints, state stays `idle`**
 - Is the broker reachable from the Pi? `mosquitto_sub -h <broker> -t '#'`

@@ -34,10 +34,14 @@ def _detect_panel() -> Any:
             "could not auto-detect inky panel: "
             f"{type(exc).__name__}: {exc}\n"
             "Troubleshooting:\n"
-            "  1. raspi-config -> Interface Options -> SPI -> enable\n"
-            "  2. confirm the HAT EEPROM is readable: ls /proc/device-tree/hat\n"
+            "  1. enable BOTH interfaces: raspi-config -> Interface Options ->\n"
+            "     SPI -> enable, and I2C -> enable. I2C is how the HAT EEPROM is\n"
+            "     read; without it you get 'No EEPROM detected'.\n"
+            "  2. reboot after enabling SPI/I2C, then check the EEPROM is visible:\n"
+            "     ls /dev/i2c-1 && sudo i2cdetect -y 1   (expect '50' in the grid)\n"
             "  3. user running the service must be in the 'gpio' and 'spi' groups\n"
-            "  4. reboot after enabling SPI"
+            "  4. if i2cdetect shows no '50', the board has no readable EEPROM and\n"
+            "     inky.auto() cannot identify it (some Impression/Spectra units)"
         ) from exc
 
 
