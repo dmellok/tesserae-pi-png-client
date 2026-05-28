@@ -9,8 +9,9 @@
 #
 # What it does, idempotently:
 #   1. apt-get install build + runtime prerequisites (incl. libs Pillow needs)
-#   2. raspi-config nonint do_spi 0 + do_i2c 0   (SPI bus + I2C for the HAT
-#                                                  EEPROM that auto-detect reads)
+#   2. raspi-config do_spi 0 + do_i2c 0, and dtoverlay=spi0-0cs in config.txt
+#      (SPI bus, I2C for the HAT EEPROM auto-detect reads, and freeing the CS
+#       pin so inky can drive chip-select itself)
 #   3. usermod -aG gpio,spi $USER       (group membership for HAT access)
 #   4. python3 -m venv .venv            (in the repo directory)
 #   5. .venv/bin/pip install -e .       (project + inky[rpi] + paho-mqtt + Pillow)
@@ -148,19 +149,39 @@ else
         libtiff6
 fi
 
-# ----- 2. SPI + I2C -----
+# ----- 2. SPI + I2C + chip-select overlay -----
 needs_reboot=false
 # SPI carries pixel data to the panel; I2C is how inky.auto() reads the HAT
-# ID EEPROM to identify the board. Without I2C, auto-detection fails with
-# "No EEPROM detected! You must manually initialise your Inky board."
-if $is_rpi && command -v raspi-config >/dev/null 2>&1; then
-    echo "==> enabling SPI via raspi-config"
-    sudo raspi-config nonint do_spi 0
-    echo "==> enabling I2C via raspi-config (needed for HAT EEPROM detection)"
-    sudo raspi-config nonint do_i2c 0
-    needs_reboot=true
+# ID EEPROM to identify the board (without it: "No EEPROM detected! You must
+# manually initialise your Inky board"). The spi0-0cs overlay tells the kernel
+# SPI driver to claim ZERO hardware chip-select pins, freeing GPIO7/8 so inky
+# can drive CS in software — without it inky aborts at paint time with
+# "Chip Select: (line 8, GPIO8) currently claimed by spi0 CS0".
+if $is_rpi; then
+    if command -v raspi-config >/dev/null 2>&1; then
+        echo "==> enabling SPI via raspi-config"
+        sudo raspi-config nonint do_spi 0
+        echo "==> enabling I2C via raspi-config (needed for HAT EEPROM detection)"
+        sudo raspi-config nonint do_i2c 0
+        needs_reboot=true
+    else
+        echo "==> raspi-config not found; enable SPI + I2C yourself"
+    fi
+    boot_config=/boot/firmware/config.txt
+    [[ -f "$boot_config" ]] || boot_config=/boot/config.txt
+    if [[ -f "$boot_config" ]]; then
+        if grep -q '^dtoverlay=spi0-0cs' "$boot_config"; then
+            echo "==> spi0-0cs overlay already present in $boot_config"
+        else
+            echo "==> adding 'dtoverlay=spi0-0cs' to $boot_config (frees CS pin for inky)"
+            echo 'dtoverlay=spi0-0cs' | sudo tee -a "$boot_config" >/dev/null
+            needs_reboot=true
+        fi
+    else
+        echo "==> no boot config.txt found; add 'dtoverlay=spi0-0cs' yourself"
+    fi
 else
-    echo "==> skipping SPI/I2C enable (no raspi-config / not on a Pi)"
+    echo "==> skipping SPI/I2C/overlay setup (not on a Pi)"
 fi
 
 # ----- 3. groups -----

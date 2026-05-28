@@ -72,8 +72,10 @@ sudo apt install -y python3-pip python3-dev build-essential \
                     libopenjp2-7 libtiff6
 sudo raspi-config nonint do_spi 0          # pixel data to the panel
 sudo raspi-config nonint do_i2c 0          # HAT EEPROM read by auto-detect
+# free the CS pin so inky can drive chip-select in software:
+echo 'dtoverlay=spi0-0cs' | sudo tee -a /boot/firmware/config.txt
 sudo usermod -aG gpio,spi "$USER"          # log out + back in after this
-# reboot so SPI + I2C take effect before first run
+# reboot so SPI + I2C + the overlay take effect before first run
 
 git clone https://github.com/dmellok/tesserae-pi-png-client
 cd tesserae-pi-png-client
@@ -241,6 +243,17 @@ For each arriving frame:
 - if `i2cdetect` shows no `50`, the board has no readable EEPROM (some
   Impression/Spectra units, all non-genuine boards) and auto-detect can't
   identify it
+
+**`Woah there, some pins we need are in use!` / `Chip Select … claimed by spi0 CS0`**
+- The panel auto-detects fine but paint fails: the kernel SPI driver reserves
+  GPIO8 (CS0), while recent `inky` drives chip-select in software.
+- Free the pin with the zero-chip-select overlay, then reboot:
+  ```bash
+  CONFIG=/boot/firmware/config.txt; [ -f "$CONFIG" ] || CONFIG=/boot/config.txt
+  grep -q '^dtoverlay=spi0-0cs' "$CONFIG" || echo 'dtoverlay=spi0-0cs' | sudo tee -a "$CONFIG"
+  sudo reboot
+  ```
+- `scripts/install.sh` does this automatically; this is for manual installs.
 
 **Frame never paints, state stays `idle`**
 - Is the broker reachable from the Pi? `mosquitto_sub -h <broker> -t '#'`
